@@ -1,0 +1,82 @@
+#!/usr/bin/env coffee
+__doc__ = """
+Precompile nunjucks templates
+
+Usage:
+  nunjucks [options] <path_or_folder>
+
+Options:
+  -h --help
+  -o --output=<output>      Output File or folder
+  -a --amd         Exports amd style (require.js, oz.js, or other amd loader)
+  -p --path        Path to nunjucks, only valid for amd-style
+  -m --min         Minimze output
+  -s --simple      Output template function only
+  -r --root        Template root
+  -e --extension   The file extension for the templates [default: html]
+"""
+fs = require 'fs'
+path = require 'path'
+
+{docopt} = require 'docopt'
+compiler = require('../src/compiler')
+nunjucks = require('../index')
+
+print = console.log
+
+main = (args)->
+  _the_path = args['<path_or_folder>']
+  if _the_path and fs.existsSync _the_path
+    fs.stat _the_path, (err, s)->
+      if s.isFile()
+        precompile_file _the_path, args
+      else if s.isDirectory()
+        precompile_directory _the_path, args
+      else
+        print 'Error: the given path is not exists or it is not a folder or a directory.'
+  else
+    print "Error: given path doesn't exists."
+    print __doc__
+
+precompile_file = (pathname, args)->
+  #options: --amd --min --simple
+  compiled_tmpl = new nunjucks.Template """
+  {% if args['--amd'] %}
+    define('{{filename}}', ['nunjucks-amd'], function(nunjuck){ )
+  {% else %}
+    (function(){
+  {% endif %}
+    var templates = {};
+    templates['{{filename}}'] = (function(){
+      {{src}}
+    })();
+    nunjuck.env.registerPrecompiled(templates);
+  {% if args['--amd'] %}
+  }
+  {% else %}
+  })()
+  {% endif %}
+  """
+  src = compiler.compile(fs.readFileSync(pathname, 'utf-8'))
+  result_data = compiled_tmpl.render { src: src, args: args, filename: pathname }
+  if not args['--output']
+    print result_data
+  else
+    # write the result to files
+    output_path = args['--output']
+    fs.writeFile output_path, result_data, (err)->
+      if err
+        print 'error when saving result data to ouput file.'
+        print err
+      else
+        print "compile #{pathname} -> #{output_path}"
+
+precompile_directory = (pathname, args)->
+  print pathname
+
+(->
+  args = docopt(__doc__, {argv: process.argv[2..], help: true, version: '0.1.7'})
+  #print args
+  main(args)
+)()
+
