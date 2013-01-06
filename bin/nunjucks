@@ -1,4 +1,10 @@
 #!/usr/bin/env coffee
+###
+  most of the command line options are copy from Handlebars' command line tools.
+@TODO --root --path --min --simple
+###
+
+# [docopt](http://docopt.org/)
 __doc__ = """
 Precompile nunjucks templates
 
@@ -9,7 +15,7 @@ Options:
   -h --help
   -o --output=<output>      Output File or folder
   -a --amd         Exports amd style (require.js, oz.js, or other amd loader)
-  -p --path        Path to nunjucks, only valid for amd-style
+  -p --path        Path to nunjucks, only valid for amd-style. define('{{path}}/name')
   -m --min         Minimze output
   -s --simple      Output template function only
   -r --root        Template root
@@ -40,23 +46,24 @@ main = (args)->
 
 precompile_file = (pathname, args)->
   #options: --amd --min --simple
-  compiled_tmpl = new nunjucks.Template """
-  {% if args['--amd'] %}
-    define('{{filename}}', ['nunjucks-amd'], function(nunjuck){ )
-  {% else %}
-    (function(){
-  {% endif %}
-    var templates = {};
-    templates['{{filename}}'] = (function(){
-      {{src}}
-    })();
-    nunjuck.env.registerPrecompiled(templates);
-  {% if args['--amd'] %}
+  compiled_tmpl = new nunjucks.template """
+{% if args['--amd'] %}
+  define('{{filename}}', ['nunjucks-runtime'], function(nunjuck){ )
+{% else %}
+  (function(){
+{% endif %}
+  var templates = {};
+  templates['{{filename}}'] = (function(){
+    {{src}}
+  })();
+  nunjuck.env.registerPrecompiled(templates);
+  return nunjuck.env.getTemplate({{filename}});
+{% if args['--amd'] %}
   }
-  {% else %}
+{% else %}
   })()
-  {% endif %}
-  """
+{% endif %}
+"""
   src = compiler.compile(fs.readFileSync(pathname, 'utf-8'))
   result_data = compiled_tmpl.render { src: src, args: args, filename: pathname }
   if not args['--output']
@@ -72,7 +79,6 @@ precompile_file = (pathname, args)->
         print "compile #{pathname} -> #{output_path}"
 
 precompile_directory = (pathname, args)->
-  print pathname
 
 (->
   args = docopt(__doc__, {argv: process.argv[2..], help: true, version: '0.1.7'})
